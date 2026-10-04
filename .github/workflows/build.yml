@@ -35,7 +35,13 @@ jobs:
         run: |
           export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
           mkdir -p out
-          make O=out ARCH=arm64 vendor/vili_QGKI.config || make O=out ARCH=arm64 vendor/vili_user_defconfig || make O=out ARCH=arm64 vendor/vili_defconfig
+          # Set up base GKI defconfig and merge vili_QGKI.config
+          if [ -f arch/arm64/configs/gki_defconfig ]; then
+            cat arch/arm64/configs/gki_defconfig arch/arm64/configs/vendor/vili_QGKI.config > out/.config
+          else
+            cp arch/arm64/configs/vendor/vili_QGKI.config out/.config
+          fi
+          make O=out ARCH=arm64 olddefconfig
 
       - name: Compile Official Vili Kernel
         run: |
