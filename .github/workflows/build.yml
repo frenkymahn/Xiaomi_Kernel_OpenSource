@@ -51,7 +51,7 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_COMPAT=arm-linux-gnueabi-
 
-          # Build Image and Xiaomi DTBs
+          # Build Image and Xiaomi DTBs with LLVM Integrated Assembler
           make -j$(nproc --all) O=out \
             CC=clang \
             LD=ld.lld \
@@ -60,6 +60,9 @@ jobs:
             OBJCOPY=llvm-objcopy \
             OBJDUMP=llvm-objdump \
             STRIP=llvm-strip \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            COMPAT_VDSO=0 \
             Image dtbs
 
       - name: Package with AnyKernel3
