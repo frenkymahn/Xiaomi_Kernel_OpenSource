@@ -46,6 +46,13 @@ jobs:
           # Disable 32-bit vDSO to eliminate host x86 assembler error
           scripts/config --file out/.config --disable COMPAT_VDSO
           scripts/config --file out/.config --disable VDSO32
+
+          # Fix Linker Undefined Symbols (Missing Qualcomm Core Drivers)
+          scripts/config --file out/.config --enable CONFIG_QCOM_SMEM
+          scripts/config --file out/.config --enable CONFIG_QCOM_QTEE_SHMBRIDGE
+          scripts/config --file out/.config --enable CONFIG_I3C
+          scripts/config --file out/.config --enable CONFIG_I3C_MASTER_MSM_GENI
+
           make O=out ARCH=arm64 olddefconfig
 
       - name: Compile vili-r-oss GKI Image
@@ -55,7 +62,7 @@ jobs:
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
 
-          # Compile GKI Kernel Image only
+          # Compile GKI Kernel Image
           make -j$(nproc --all) O=out \
             CC=clang \
             LD=ld.lld \
