@@ -31,14 +31,11 @@ jobs:
           cp -r clang-repo/clang-r416183b/* $GITHUB_WORKSPACE/clang/
           rm -rf clang-repo
 
-      - name: Merge Xiaomi Vili Defconfig
+      - name: Configure Kernel
         run: |
           export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
           mkdir -p out
-          ARCH=arm64 ./scripts/kconfig/merge_config.sh -m -O out \
-            arch/arm64/configs/vendor/lahaina-qgki_defconfig \
-            arch/arm64/configs/vendor/vili_QGKI.config
-          make O=out ARCH=arm64 savedefconfig || true
+          make O=out ARCH=arm64 vendor/vili_QGKI.config || make O=out ARCH=arm64 vendor/vili_user_defconfig || make O=out ARCH=arm64 vendor/vili_defconfig
 
       - name: Compile Official Vili Kernel
         run: |
@@ -75,7 +72,7 @@ jobs:
             find out/arch/arm64/boot/dts/vendor/qcom/ -name "*lahaina*.dtb" | head -n 1 | xargs -I {} cp {} AnyKernel3/dtb
           fi
 
-          # 3. Create Xiaomi Official DTBO Image using dtc
+          # 3. Create Xiaomi Official DTBO Image
           find out/arch/arm64/boot/dts/vendor/qcom/ -name "*vili*.dtbo" -o -name "*overlay*.dtbo" > dtbo_list.txt || true
           if [ -s dtbo_list.txt ]; then
             git clone --depth=1 https://android.googlesource.com/platform/system/libufdt libufdt
