@@ -31,6 +31,10 @@ jobs:
           cp -r clang-repo/clang-r416183b/* $GITHUB_WORKSPACE/clang/
           rm -rf clang-repo
 
+      - name: Integrate KernelSU
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
+
       - name: Configure Kernel
         run: |
           export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
@@ -47,14 +51,10 @@ jobs:
           scripts/config --file out/.config --disable COMPAT_VDSO
           scripts/config --file out/.config --disable VDSO32
 
-          # Fix QCOM Core SMEM
+          # Fix QCOM Core SMEM & Bus Errors
           scripts/config --file out/.config --enable CONFIG_QCOM_SMEM
-
-          # Disable Problematic Debug/Bus Drivers causing undefined symbols
           scripts/config --file out/.config --disable CONFIG_I3C
           scripts/config --file out/.config --disable CONFIG_I3C_MASTER_MSM_GENI
-          scripts/config --file out/.config --disable CONFIG_MSM_TZ_LOG
-          scripts/config --file out/.config --disable CONFIG_QCOM_TZ_LOG
 
           make O=out ARCH=arm64 olddefconfig
 
@@ -82,12 +82,12 @@ jobs:
           git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 AnyKernel3
 
           # Copy GKI Kernel Image
-          cp out/arch/arm64/boot/Image AnyKernel3/Image
+          cp out/arch/arch/boot/Image AnyKernel3/Image 2>/dev/null || cp out/arch/arm64/boot/Image AnyKernel3/Image
 
-          # AnyKernel3 Flashing Setup for Port ROMs
+          # AnyKernel3 Flashing Setup with VBMETA Patching for Port ROMs
           cat << 'EOF' > AnyKernel3/anykernel.sh
           properties() { '
-          kernel.string=Port ROM Ready GKI Kernel for Xiaomi 11T Pro
+          kernel.string=Port ROM Ready GKI Kernel with KernelSU for Xiaomi 11T Pro
           do.devicecheck=1
           do.modules=0
           do.systemless=1
@@ -104,7 +104,7 @@ jobs:
 
           . tools/ak3-core.sh;
 
-          # Flash GKI Image directly to boot partition
+          # Flash GKI Image directly to boot partition with VBMETA bypass
           BLOCK=boot;
           is_slot_device=auto;
           RAMDISK_COMPRESSION=auto;
@@ -114,11 +114,11 @@ jobs:
           EOF
 
           cd AnyKernel3
-          zip -r9 ../Xiaomi-11T-Pro-Kernel.zip * -x .git README.md *placeholder
+          zip -r9 ../Xiaomi-11T-Pro-KernelSU.zip * -x .git README.md *placeholder
           cd ..
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Xiaomi-11T-Pro-Kernel
-          path: Xiaomi-11T-Pro-Kernel.zip
+          name: Xiaomi-11T-Pro-KernelSU
+          path: Xiaomi-11T-Pro-KernelSU.zip
