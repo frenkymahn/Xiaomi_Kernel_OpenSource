@@ -33,7 +33,7 @@ jobs:
 
       - name: Integrate KernelSU
         run: |
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
 
       - name: Configure Kernel
         run: |
@@ -82,7 +82,7 @@ jobs:
           git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 AnyKernel3
 
           # Copy GKI Kernel Image
-          cp out/arch/arch/boot/Image AnyKernel3/Image 2>/dev/null || cp out/arch/arm64/boot/Image AnyKernel3/Image
+          cp out/arch/arm64/boot/Image AnyKernel3/Image
 
           # AnyKernel3 Flashing Setup with VBMETA Patching for Port ROMs
           cat << 'EOF' > AnyKernel3/anykernel.sh
