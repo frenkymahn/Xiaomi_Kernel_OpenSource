@@ -5,120 +5,97 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Build Kernel by FrenkyMahn
+    runs-on: ubuntu-20.04
     steps:
-      - name: Checkout Source
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192
+          temp-reserve-mb: 2048
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-docker-images: 'true'
+
+      - name: Checkout Kernel Source
         uses: actions/checkout@v4
+        with:
+          ref: vili-r-oss
+          fetch-depth: 1
 
-      - name: Free Disk Space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/share/swift
-
-      - name: Setup Build Dependencies
+      - name: Set up Build Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev bison flex \
-            libelf-dev libfl-dev git curl wget zip unzip python3 python-is-python3 \
-            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
-
-      - name: Setup Clang (AOSP r416183b)
-        run: |
-          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 -b android12-release clang-repo
-          mkdir -p $GITHUB_WORKSPACE/clang
-          cp -r clang-repo/clang-r416183b/* $GITHUB_WORKSPACE/clang/
-          rm -rf clang-repo
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev clang lld llvm zip git curl
 
       - name: Integrate KernelSU
         run: |
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
 
+      - name: Download Clang Toolchain
+        run: |
+          mkdir clang
+          cd clang
+          curl -LO "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android12-release/clang-r416183b.tar.gz"
+          tar -xf clang-r416183b.tar.gz
+          cd ..
+
       - name: Configure Kernel
         run: |
-          export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
-          mkdir -p out
-          
-          # Base GKI + Vili Config
-          if [ -f arch/arm64/configs/gki_defconfig ]; then
-            cat arch/arm64/configs/gki_defconfig arch/arm64/configs/vendor/vili_QGKI.config > out/.config
-          else
-            cp arch/arm64/configs/vendor/vili_QGKI.config out/.config
-          fi
+          export PATH=$(pwd)/clang/bin:$PATH
+          make O=out ARCH=arm64 CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- vili_QGKI.config
+          make O=out ARCH=arm64 CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- olddefconfig
 
-          # Disable 32-bit vDSO
-          scripts/config --file out/.config --disable COMPAT_VDSO
-          scripts/config --file out/.config --disable VDSO32
-
-          # Fix QCOM Core SMEM & Bus Errors
-          scripts/config --file out/.config --enable CONFIG_QCOM_SMEM
-          scripts/config --file out/.config --disable CONFIG_I3C
-          scripts/config --file out/.config --disable CONFIG_I3C_MASTER_MSM_GENI
-
-          make O=out ARCH=arm64 olddefconfig
-
-      - name: Compile vili-r-oss GKI Image
+      - name: Compile Kernel
         run: |
-          export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
-          export ARCH=arm64
-          export SUBARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-
-          # Compile GKI Kernel Image
-          make -j$(nproc --all) O=out \
-            CC=clang \
-            LD=ld.lld \
-            AR=llvm-ar \
-            NM=llvm-nm \
-            OBJCOPY=llvm-objcopy \
-            OBJDUMP=llvm-objdump \
-            STRIP=llvm-strip \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            Image
+          export PATH=$(pwd)/clang/bin:$PATH
+          make -j$(nproc --all) O=out ARCH=arm64 CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- \
+            Image \
+            modules
 
       - name: Package with AnyKernel3
         run: |
-          git clone https://github.com/osm0sis/AnyKernel3.git --depth=1 AnyKernel3
-
-          # Copy GKI Kernel Image
-          cp out/arch/arm64/boot/Image AnyKernel3/Image
-
-          # AnyKernel3 Flashing Setup with VBMETA Patching for Port ROMs
-          cat << 'EOF' > AnyKernel3/anykernel.sh
+          git clone https://github.com/osm0sis/AnyKernel3.git
+          cd AnyKernel3
+          rm -rf anykernel.sh
+          
+          cat << 'EOF' > anykernel.sh
           properties() { '
-          kernel.string=Port ROM Ready GKI Kernel with KernelSU for Xiaomi 11T Pro
+          kernel.string=Vili Official Port Kernel by FrenkyMahn
           do.devicecheck=1
           do.modules=0
           do.systemless=1
           do.cleanup=1
           do.cleanuponabort=0
           device.name1=vili
-          device.name2=Xiaomi 11T Pro
+          device.name2=vili_in
+          device.name3=vili_global
+          device.name4=enuma
+          device.name5=elish
+          supported.versions=11-15
           '; }
 
-          boot_attributes() {
-          set_perm_recursive 0 0 755 644 $RAMDISK/*;
-          set_perm_recursive 0 0 750 750 $RAMDISK/init* $RAMDISK/sbin;
-          }
-
-          . tools/ak3-core.sh;
-
-          # Flash GKI Image directly to boot partition with VBMETA bypass
-          BLOCK=boot;
-          is_slot_device=auto;
+          # Capitalized standard AnyKernel3 variables
+          BLOCK=auto;
+          IS_SLOT_DEVICE=auto;
           RAMDISK_COMPRESSION=auto;
           PATCH_VBMETA_FLAG=auto;
+
+          # Core initialization
+          . tools/ak3-core.sh;
+          reset_ak;
+
+          # Flash kernel directly to boot partition
           split_boot;
           flash_boot;
           EOF
 
-          cd AnyKernel3
-          zip -r9 ../Xiaomi-11T-Pro-KernelSU.zip * -x .git README.md *placeholder
-          cd ..
+          cp ../out/arch/arm64/boot/Image Image
+          zip -r9 ../Vili_Kernel_Port_Fixed.zip * -x .git README.md *placeholder
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Xiaomi-11T-Pro-KernelSU
-          path: Xiaomi-11T-Pro-KernelSU.zip
+          name: Vili-Kernel-Port-Fixed
+          path: Vili_Kernel_Port_Fixed.zip
