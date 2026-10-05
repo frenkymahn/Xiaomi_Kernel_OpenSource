@@ -76,7 +76,7 @@ jobs:
           supported.versions=11-15
           '; }
 
-          # Capitalized standard AnyKernel3 variables
+          # Shell Variables (Capitalized Standard)
           BLOCK=auto;
           IS_SLOT_DEVICE=auto;
           RAMDISK_COMPRESSION=auto;
@@ -86,7 +86,7 @@ jobs:
           . tools/ak3-core.sh;
           reset_ak;
 
-          # Flash kernel directly to boot partition
+          # Flash kernel directly to active boot partition
           split_boot;
           flash_boot;
           EOF
