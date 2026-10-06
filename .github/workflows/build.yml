@@ -55,6 +55,26 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
 
+      - name: Fix Techpack Audio Headers & Pointers
+        run: |
+          # techpack/audio soc Makefile-ൽ include flags ചേർക്കുന്നു
+          if [ -f "techpack/audio/soc/Makefile" ]; then
+            sed -i '1i ccflags-y += -I$(srctree)/drivers/pinctrl -I$(srctree)/techpack/audio/soc' techpack/audio/soc/Makefile
+          fi
+
+          # pinctrl-wcd.c, pinctrl-lpi.c ഫയലുകളിലെ ഹെഡറുകൾ തിരുത്തുന്നു
+          for f in techpack/audio/soc/pinctrl-wcd.c techpack/audio/soc/pinctrl-lpi.c; do
+            if [ -f "$f" ]; then
+              sed -i 's|#include "pinctrl-utils.h"|#include <../drivers/pinctrl/core.h>\n#include <../drivers/pinctrl/pinctrl-utils.h>|g' "$f"
+              sed -i 's|#include "core.h"|#include <../drivers/pinctrl/core.h>|g' "$f"
+            fi
+          done
+
+          # regmap-swr.c ഹെഡർ ഫിക്സ്
+          if [ -f "techpack/audio/soc/regmap-swr.c" ]; then
+            sed -i 's|#include <soc/internal.h>|#include "internal.h"|g' techpack/audio/soc/regmap-swr.c
+          fi
+
       - name: Build Kernel Image
         run: |
           export ARCH=arm64
@@ -83,7 +103,9 @@ jobs:
           scripts/config --file out/.config --set-val FRAME_WARN 4096
 
           make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" olddefconfig
-          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" Image.gz
+          
+          # മൾട്ടി-കോറിൽ പരാജയപ്പെട്ടാൽ കൃത്യമായ എറർ താഴെ പ്രിന്റ് ചെയ്യാൻ സിംഗിൾ-കോർ റൺ നൽകുന്നു
+          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" Image.gz || make -j1 O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" V=1 Image.gz
 
       - name: Prepare AnyKernel3 Zip
         run: |
