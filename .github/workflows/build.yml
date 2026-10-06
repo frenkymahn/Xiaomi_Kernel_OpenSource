@@ -23,6 +23,12 @@ jobs:
           sudo ./llvm.sh 17
           sudo apt-get install -y lld-17 llvm-17 clang-17
 
+          # Create generic symlinks for LLVM tools
+          for tool in clang clang++ ld.lld llvm-ar llvm-nm llvm-objcopy llvm-objdump llvm-readelf llvm-strip; do
+            sudo ln -sf /usr/bin/${tool}-17 /usr/bin/${tool} || true
+          done
+
+          # Fallback links for aarch64 cross prefix
           sudo ln -sf /usr/bin/ld.lld-17 /usr/bin/aarch64-linux-gnu-ld || true
           sudo ln -sf /usr/bin/llvm-ar-17 /usr/bin/aarch64-linux-gnu-ar || true
           sudo ln -sf /usr/bin/llvm-nm-17 /usr/bin/aarch64-linux-gnu-nm || true
@@ -55,14 +61,6 @@ jobs:
         run: |
           export ARCH=arm64
           export SUBARCH=arm64
-          export CC=clang-17
-          export LD=ld.lld-17
-          export AR=llvm-ar-17
-          export NM=llvm-nm-17
-          export OBJCOPY=llvm-objcopy-17
-          export OBJDUMP=llvm-objdump-17
-          export READELF=llvm-readelf-17
-          export STRIP=llvm-strip-17
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CROSS_COMPILE=aarch64-linux-gnu-
 
@@ -81,8 +79,8 @@ jobs:
             scripts/kconfig/merge_config.sh -m -O out out/.config "$frag"
           done
 
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC=clang-17 LD=ld.lld-17 olddefconfig
-          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC=clang-17 LD=ld.lld-17 Image.gz
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
+          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 Image.gz
 
       - name: Prepare AnyKernel3 Zip
         run: |
