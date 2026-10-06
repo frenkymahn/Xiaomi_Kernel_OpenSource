@@ -66,35 +66,29 @@ jobs:
           export CLANG_TRIPLE=aarch64-linux-gnu-
           export CROSS_COMPILE=aarch64-linux-gnu-
 
-          # Find available base defconfig
-          if [ -f "arch/arm64/configs/lahaina-qgki_defconfig" ]; then
-            BASE_CONF="lahaina-qgki_defconfig"
-          elif [ -f "arch/arm64/configs/vendor/lahaina-qgki_defconfig" ]; then
-            BASE_CONF="vendor/lahaina-qgki_defconfig"
-          elif [ -f "arch/arm64/configs/lahaina_defconfig" ]; then
-            BASE_CONF="lahaina_defconfig"
-          elif [ -f "arch/arm64/configs/vendor/lahaina_defconfig" ]; then
-            BASE_CONF="vendor/lahaina_defconfig"
-          else
-            BASE_CONF=$(find arch/arm64/configs -name "*vili*defconfig" -o -name "*lahaina*defconfig" | head -n 1 | sed 's|arch/arm64/configs/||')
+          mkdir -p out
+          
+          # Detect actual config location
+          CONF_TARGET=$(find arch/arm64/configs -type f \( -name "*lahaina*defconfig*" -o -name "*gki_defconfig*" -o -name "*vili*defconfig*" \) | head -n 1)
+          if [ -z "$CONF_TARGET" ]; then
+            CONF_TARGET="arch/arm64/configs/defconfig"
           fi
+          
+          echo "Selected configuration target: $CONF_TARGET"
+          cp "$CONF_TARGET" out/.config
 
-          echo "Using base config: $BASE_CONF"
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC=clang-17 LD=ld.lld-17 $BASE_CONF
-
-          # Merge fragment configs if present
-          FRAGS=$(find arch/arm64/configs -name "*vili*config" -o -name "*vili*GKI*" | tr '\n' ' ')
-          if [ -n "$FRAGS" ]; then
-            scripts/kconfig/merge_config.sh -m -O out out/.config $FRAGS
-          fi
+          # Merge any vili fragments if present
+          find arch/arm64/configs -type f -name "*vili*.config" | while read -r frag; do
+            echo "Merging fragment: $frag"
+            scripts/kconfig/merge_config.sh -m -O out out/.config "$frag"
+          done
 
           make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC=clang-17 LD=ld.lld-17 olddefconfig
-
           make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC=clang-17 LD=ld.lld-17 Image.gz dtb
 
       - name: Prepare AnyKernel3 Zip
         run: |
-          git clone url?id=1osm0sis/AnyKernel3.git AnyKernel3
+          git clone https://github.com/osm0sis/AnyKernel3.git AnyKernel3
           sed -i 's/device.name1=.*/device.name1=vili/g' AnyKernel3/anykernel.sh
 
           if [ -f "out/arch/arm64/boot/Image.gz" ]; then
