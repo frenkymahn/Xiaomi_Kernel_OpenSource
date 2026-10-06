@@ -51,7 +51,7 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
 
-      - name: Build Kernel Image & DTB
+      - name: Build Kernel Image
         run: |
           export ARCH=arm64
           export SUBARCH=arm64
@@ -68,7 +68,6 @@ jobs:
 
           mkdir -p out
           
-          # Detect actual config location
           CONF_TARGET=$(find arch/arm64/configs -type f \( -name "*lahaina*defconfig*" -o -name "*gki_defconfig*" -o -name "*vili*defconfig*" \) | head -n 1)
           if [ -z "$CONF_TARGET" ]; then
             CONF_TARGET="arch/arm64/configs/defconfig"
@@ -77,14 +76,13 @@ jobs:
           echo "Selected configuration target: $CONF_TARGET"
           cp "$CONF_TARGET" out/.config
 
-          # Merge any vili fragments if present
           find arch/arm64/configs -type f -name "*vili*.config" | while read -r frag; do
             echo "Merging fragment: $frag"
             scripts/kconfig/merge_config.sh -m -O out out/.config "$frag"
           done
 
           make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC=clang-17 LD=ld.lld-17 olddefconfig
-          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC=clang-17 LD=ld.lld-17 Image.gz dtb
+          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC=clang-17 LD=ld.lld-17 Image.gz
 
       - name: Prepare AnyKernel3 Zip
         run: |
@@ -97,7 +95,7 @@ jobs:
             cp out/arch/arm64/boot/Image AnyKernel3/
           fi
 
-          find out/arch/arm64/boot/dts -name "*.dtb" -exec cp {} AnyKernel3/dtb \; || true
+          find out/arch/arm64/boot -name "*.dtb" -exec cp {} AnyKernel3/dtb \; || true
 
           cd AnyKernel3
           zip -r9 ../NextGen-Kernel-vili-A15-A17.zip * -x .git README.md *placeholder
