@@ -41,13 +41,9 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
 
-      - name: Download AOSP Clang 17+ (r486374b)
+      - name: Download Clang 17+
         run: |
-          mkdir -p clang
-          cd clang
-          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android14-release/clang-r486374b.tar.gz
-          tar -xf clang-r486374b.tar.gz
-          cd ..
+          git clone --depth=1 https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r486374.git clang
 
       - name: Build Kernel Image & DTB
         run: |
