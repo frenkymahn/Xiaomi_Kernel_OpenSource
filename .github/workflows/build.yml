@@ -51,17 +51,9 @@ jobs:
             git cherry-pick $COMMIT2 || git cherry-pick --abort || true
           fi
 
-      - name: Setup KernelSU
+      - name: Setup KernelSU (v0.9.5 Legacy for 5.4)
         run: |
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-          
-          # Fix Linux 5.4 header compatibility inside KernelSU safely
-          if [ -d "KernelSU" ]; then
-            find -L KernelSU -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's|<linux/pgtable.h>|<asm/pgtable.h>|g' {} +
-          fi
-          if [ -d "drivers/kernelsu" ]; then
-            find -L drivers/kernelsu -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's|<linux/pgtable.h>|<asm/pgtable.h>|g' {} +
-          fi
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
 
       - name: Build Kernel Image
         run: |
