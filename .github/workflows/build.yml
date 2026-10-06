@@ -77,8 +77,9 @@ jobs:
             scripts/kconfig/merge_config.sh -m -O out out/.config "$frag"
           done
 
-          # Disable CONFIG_WERROR
+          # Fix qcom_scm module redefinition error & warnings
           scripts/config --file out/.config -d WERROR
+          scripts/config --file out/.config -e QCOM_SCM
 
           make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w" olddefconfig
           make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w" Image.gz
