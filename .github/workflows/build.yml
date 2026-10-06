@@ -16,7 +16,7 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf liblz4-tool libncurses-dev libncurses6 libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf liblz4-tool libncurses-dev libncurses6 libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev tar
 
       - name: Cherry-pick AOSP eBPF Patches
         run: |
@@ -43,7 +43,10 @@ jobs:
 
       - name: Download Clang 17+
         run: |
-          git clone --depth=1 https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r486374.git clang
+          mkdir -p clang
+          curl -LO "https://raw.githubusercontent.com/ZyCromerZ/Clang/main/Clang-17.0.6-20240118.tar.gz" || curl -LO "https://gitlab.com/panchajanya1999/azure-clang/-/archive/master/azure-clang-master.tar.gz"
+          tar -C clang/ -zxvf *.tar.gz --strip-components=1 || tar -C clang/ -zxvf *.tar.gz
+          rm -f *.tar.gz
 
       - name: Build Kernel Image & DTB
         run: |
