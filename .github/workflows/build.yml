@@ -55,9 +55,62 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
           
-          # Fix Linux 5.4 header compatibility in KernelSU
-          find drivers/kernelsu -type f -name "*.c" -o -name "*.h" | xargs sed -i 's|<linux/pgtable.h>|<asm/pgtable.h>|g'
+          # Fix Linux 5.4 header compatibility inside KernelSU safely
+          if [ -d "KernelSU" ]; then
+            find -L KernelSU -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's|<linux/pgtable.h>|<asm/pgtable.h>|g' {} +
+          fi
+          if [ -d "drivers/kernelsu" ]; then
+            find -L drivers/kernelsu -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's|<linux/pgtable.h>|<asm/pgtable.h>|g' {} +
+          fi
 
       - name: Build Kernel Image
         run: |
           export ARCH=arm64
+          export SUBARCH=arm64
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export CROSS_COMPILE=aarch64-linux-gnu-
+
+          mkdir -p out
+          
+          CONF_TARGET=$(find arch/arm64/configs -type f \( -name "*lahaina*defconfig*" -o -name "*gki_defconfig*" -o -name "*vili*defconfig*" \) | head -n 1)
+          if [ -z "$CONF_TARGET" ]; then
+            CONF_TARGET="arch/arm64/configs/defconfig"
+          fi
+          
+          echo "Selected configuration target: $CONF_TARGET"
+          cp "$CONF_TARGET" out/.config
+
+          find arch/arm64/configs -type f -name "*vili*.config" | while read -r frag; do
+            echo "Merging fragment: $frag"
+            scripts/kconfig/merge_config.sh -m -O out out/.config "$frag"
+          done
+
+          # Fix configs & suppress strict Clang 17 errors
+          scripts/config --file out/.config -d WERROR
+          scripts/config --file out/.config -e QCOM_SCM
+          scripts/config --file out/.config --set-val FRAME_WARN 4096
+
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" olddefconfig
+          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" Image.gz
+
+      - name: Prepare AnyKernel3 Zip
+        run: |
+          git clone https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+          sed -i 's/device.name1=.*/device.name1=vili/g' AnyKernel3/anykernel.sh
+
+          if [ -f "out/arch/arm64/boot/Image.gz" ]; then
+            cp out/arch/arm64/boot/Image.gz AnyKernel3/
+          elif [ -f "out/arch/arm64/boot/Image" ]; then
+            cp out/arch/arm64/boot/Image AnyKernel3/
+          fi
+
+          find out/arch/arm64/boot -name "*.dtb" -exec cp {} AnyKernel3/dtb \; || true
+
+          cd AnyKernel3
+          zip -r9 ../NextGen-Kernel-vili-A15-A17.zip * -x .git README.md *placeholder
+
+      - name: Upload Flashable Kernel Zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: NextGen-Kernel-vili-A15-A17
+          path: NextGen-Kernel-vili-A15-A17.zip
