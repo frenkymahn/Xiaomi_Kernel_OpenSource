@@ -605,4 +605,4 @@ static int __init msm_minidump_init(void)
 	smp_store_release(&md_init_done, true);
 	return 0;
 }
-subsys_initcall(msm_minidump_init)
+subsys_initcall(msm_minidump_init);
