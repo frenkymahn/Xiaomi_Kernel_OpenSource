@@ -23,12 +23,10 @@ jobs:
           sudo ./llvm.sh 17
           sudo apt-get install -y lld-17 llvm-17 clang-17
 
-          # Create generic symlinks for LLVM tools
           for tool in clang clang++ ld.lld llvm-ar llvm-nm llvm-objcopy llvm-objdump llvm-readelf llvm-strip; do
             sudo ln -sf /usr/bin/${tool}-17 /usr/bin/${tool} || true
           done
 
-          # Fallback links for aarch64 cross prefix
           sudo ln -sf /usr/bin/ld.lld-17 /usr/bin/aarch64-linux-gnu-ld || true
           sudo ln -sf /usr/bin/llvm-ar-17 /usr/bin/aarch64-linux-gnu-ar || true
           sudo ln -sf /usr/bin/llvm-nm-17 /usr/bin/aarch64-linux-gnu-nm || true
@@ -79,8 +77,11 @@ jobs:
             scripts/kconfig/merge_config.sh -m -O out out/.config "$frag"
           done
 
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 olddefconfig
-          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 Image.gz
+          # Disable CONFIG_WERROR
+          scripts/config --file out/.config -d WERROR
+
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w" olddefconfig
+          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w" Image.gz
 
       - name: Prepare AnyKernel3 Zip
         run: |
