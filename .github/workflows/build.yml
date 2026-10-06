@@ -77,13 +77,13 @@ jobs:
             scripts/kconfig/merge_config.sh -m -O out out/.config "$frag"
           done
 
-          # Fix configs & suppress strict errors
+          # Fix configs & suppress strict Clang 17 errors
           scripts/config --file out/.config -d WERROR
           scripts/config --file out/.config -e QCOM_SCM
           scripts/config --file out/.config --set-val FRAME_WARN 4096
 
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=0 KCFLAGS="-Wno-error -w" olddefconfig
-          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=0 KCFLAGS="-Wno-error -w" Image.gz
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" olddefconfig
+          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" Image.gz || make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" Image.gz
 
       - name: Prepare AnyKernel3 Zip
         run: |
