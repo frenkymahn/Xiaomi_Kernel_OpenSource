@@ -77,30 +77,37 @@ jobs:
             scripts/kconfig/merge_config.sh -m -O out out/.config "$frag"
           done
 
-          # General build & warning flags
+          # Disable modules and drivers causing linker undefined symbols
+          for cfg in CONFIG_NEURON CONFIG_NET_NEURON CONFIG_QTI_NEURON CONFIG_MSM_GVM_LOADER CONFIG_QTI_PLH_SCMI CONFIG_MSM_HAB CONFIG_MSM_MINIDUMP; do
+            sed -i "s/^$cfg=y/# $cfg is not set/" out/.config
+          done
+
           scripts/config --file out/.config -d WERROR
           scripts/config --file out/.config -e QCOM_SCM
           scripts/config --file out/.config --set-val FRAME_WARN 4096
 
-          # Subsystem Restart & Hypervisor dependencies
+          # Subsystem restart drivers for hyp_assign_phys
           scripts/config --file out/.config -e MSM_SUBSYSTEM_RESTART
           scripts/config --file out/.config -e MSM_SYSMON_QMI_COMM
           scripts/config --file out/.config -e MSM_PIL
           scripts/config --file out/.config -e MSM_PIL_SSR_GENERIC
           scripts/config --file out/.config -e QTI_GVM_QUIN_COMMON
 
-          # Disable Neuron channel & networking drivers to eliminate hh_* symbols
+          # Ensure troublesome features stay disabled
           scripts/config --file out/.config -d NEURON
           scripts/config --file out/.config -d NET_NEURON
           scripts/config --file out/.config -d QTI_NEURON
-
-          # Disable PLH SCMI driver to eliminate rimps_plh_init error
+          scripts/config --file out/.config -d MSM_GVM_LOADER
           scripts/config --file out/.config -d QTI_PLH_SCMI
-
-          # Enable Minidump driver to satisfy trace.c and ipc_logging symbols
           scripts/config --file out/.config -e MSM_MINIDUMP
 
           make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" olddefconfig
+
+          # Force disable again post-olddefconfig to ensure no automatic re-enabling
+          sed -i 's/^CONFIG_NEURON=y/# CONFIG_NEURON is not set/' out/.config
+          sed -i 's/^CONFIG_NET_NEURON=y/# CONFIG_NET_NEURON is not set/' out/.config
+          sed -i 's/^CONFIG_MSM_GVM_LOADER=y/# CONFIG_MSM_GVM_LOADER is not set/' out/.config
+          sed -i 's/^CONFIG_QTI_PLH_SCMI=y/# CONFIG_QTI_PLH_SCMI is not set/' out/.config
           
           # Compile uncompressed raw kernel Image
           make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" Image || make -j1 O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" V=1 Image
