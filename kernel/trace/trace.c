@@ -8941,8 +8941,7 @@ static struct notifier_block trace_die_notifier = {
 #ifdef CONFIG_QCOM_MINIDUMP_FTRACE
 static void trace_dump_seq_buffer(struct trace_seq *s)
 {
-	if (minidump_ftrace_in_oops && minidump_ftrace_dump)
-		// minidump_add_trace_event(s->buffer, s->seq.len);
+    /* minidump trace event disabled */
 }
 #else
 static void trace_dump_seq_buffer(struct trace_seq *s)
