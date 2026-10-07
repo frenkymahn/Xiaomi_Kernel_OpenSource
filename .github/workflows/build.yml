@@ -77,20 +77,40 @@ jobs:
             scripts/kconfig/merge_config.sh -m -O out out/.config "$frag"
           done
 
-          # Suppress strict Clang 17 warnings and frame size limits
+          # Suppress warnings & build errors
           scripts/config --file out/.config -d WERROR
           scripts/config --file out/.config -e QCOM_SCM
           scripts/config --file out/.config --set-val FRAME_WARN 4096
 
-          # Subsystem restart drivers
+          # Subsystem restart & PIL dependencies (fixes hyp_assign_phys)
           scripts/config --file out/.config -e MSM_SUBSYSTEM_RESTART
           scripts/config --file out/.config -e MSM_SYSMON_QMI_COMM
           scripts/config --file out/.config -e MSM_PIL
           scripts/config --file out/.config -e MSM_PIL_SSR_GENERIC
 
+          # Enable Minidump (fixes md_pageowner_*, md_meminfo_*, msm_minidump_enabled)
+          scripts/config --file out/.config -e MSM_MINIDUMP
+          scripts/config --file out/.config -e QCOM_MINIDUMP
+
+          # Disable Gunyah Hypervisor consumers (fixes hh_* symbols)
+          scripts/config --file out/.config -d MSM_GVM_LOADER
+          scripts/config --file out/.config -d QTI_MEM_BUF
+
+          # Disable Neuron drivers (fixes neuron_unregister_app_driver)
+          scripts/config --file out/.config -d NEURON_BLOCK_SERVER
+          scripts/config --file out/.config -d BLK_DEV_NEURON_SERVER
+          scripts/config --file out/.config -d NEURON
+
           make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" olddefconfig
-          
-          # Build raw kernel Image
+
+          # Force disable again post-olddefconfig to avoid Kconfig dependency auto-selection
+          sed -i 's/^CONFIG_MSM_GVM_LOADER=y/# CONFIG_MSM_GVM_LOADER is not set/' out/.config
+          sed -i 's/^CONFIG_QTI_MEM_BUF=y/# CONFIG_QTI_MEM_BUF is not set/' out/.config
+          sed -i 's/^CONFIG_NEURON_BLOCK_SERVER=y/# CONFIG_NEURON_BLOCK_SERVER is not set/' out/.config
+          sed -i 's/^CONFIG_BLK_DEV_NEURON_SERVER=y/# CONFIG_BLK_DEV_NEURON_SERVER is not set/' out/.config
+          sed -i 's/^CONFIG_NEURON=y/# CONFIG_NEURON is not set/' out/.config
+
+          # Build uncompressed raw Image
           make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" Image || make -j1 O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" V=1 Image
 
       - name: Prepare AnyKernel3 Zip
