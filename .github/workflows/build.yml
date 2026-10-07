@@ -55,26 +55,6 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
 
-      - name: Fix Techpack Audio Headers & Pointers
-        run: |
-          # techpack/audio soc Makefile-ൽ include flags ചേർക്കുന്നു
-          if [ -f "techpack/audio/soc/Makefile" ]; then
-            sed -i '1i ccflags-y += -I$(srctree)/drivers/pinctrl -I$(srctree)/techpack/audio/soc' techpack/audio/soc/Makefile
-          fi
-
-          # pinctrl-wcd.c, pinctrl-lpi.c ഫയലുകളിലെ ഹെഡറുകൾ തിരുത്തുന്നു
-          for f in techpack/audio/soc/pinctrl-wcd.c techpack/audio/soc/pinctrl-lpi.c; do
-            if [ -f "$f" ]; then
-              sed -i 's|#include "pinctrl-utils.h"|#include <../drivers/pinctrl/core.h>\n#include <../drivers/pinctrl/pinctrl-utils.h>|g' "$f"
-              sed -i 's|#include "core.h"|#include <../drivers/pinctrl/core.h>|g' "$f"
-            fi
-          done
-
-          # regmap-swr.c ഹെഡർ ഫിക്സ്
-          if [ -f "techpack/audio/soc/regmap-swr.c" ]; then
-            sed -i 's|#include <soc/internal.h>|#include "internal.h"|g' techpack/audio/soc/regmap-swr.c
-          fi
-
       - name: Build Kernel Image
         run: |
           export ARCH=arm64
@@ -97,25 +77,33 @@ jobs:
             scripts/kconfig/merge_config.sh -m -O out out/.config "$frag"
           done
 
-          # Fix configs & suppress strict Clang 17 errors
+          # ലിങ്കർ എററുകൾ ഒഴിവാക്കാനുള്ള കോൺഫിഗ് മാറ്റങ്ങൾ
           scripts/config --file out/.config -d WERROR
           scripts/config --file out/.config -e QCOM_SCM
           scripts/config --file out/.config --set-val FRAME_WARN 4096
+          scripts/config --file out/.config -e MSM_SUBSYSTEM_RESTART
+          scripts/config --file out/.config -e MSM_SYSMON_QMI_COMM
+          scripts/config --file out/.config -e MSM_PIL
+          scripts/config --file out/.config -e MSM_PIL_SSR_GENERIC
+          scripts/config --file out/.config -e QTI_GVM_QUIN_COMMON
+          scripts/config --file out/.config -d QTI_NEURON
+          scripts/config --file out/.config -d MSM_MINIDUMP
 
           make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" olddefconfig
           
-          # മൾട്ടി-കോറിൽ പരാജയപ്പെട്ടാൽ കൃത്യമായ എറർ താഴെ പ്രിന്റ് ചെയ്യാൻ സിംഗിൾ-കോർ റൺ നൽകുന്നു
-          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" Image.gz || make -j1 O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" V=1 Image.gz
+          # Image.gz ന് പകരം വേഗത്തിലും കൃത്യതയ്ക്കുമായി Normal Image നിർമ്മിക്കുന്നു
+          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" Image || make -j1 O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" V=1 Image
 
       - name: Prepare AnyKernel3 Zip
         run: |
           git clone https://github.com/osm0sis/AnyKernel3.git AnyKernel3
           sed -i 's/device.name1=.*/device.name1=vili/g' AnyKernel3/anykernel.sh
 
-          if [ -f "out/arch/arm64/boot/Image.gz" ]; then
-            cp out/arch/arm64/boot/Image.gz AnyKernel3/
-          elif [ -f "out/arch/arm64/boot/Image" ]; then
+          # Normal Image കോപ്പി ചെയ്യുന്നു
+          if [ -f "out/arch/arm64/boot/Image" ]; then
             cp out/arch/arm64/boot/Image AnyKernel3/
+          elif [ -f "out/arch/arm64/boot/Image.gz" ]; then
+            cp out/arch/arm64/boot/Image.gz AnyKernel3/
           fi
 
           find out/arch/arm64/boot -name "*.dtb" -exec cp {} AnyKernel3/dtb \; || true
