@@ -8942,7 +8942,7 @@ static struct notifier_block trace_die_notifier = {
 static void trace_dump_seq_buffer(struct trace_seq *s)
 {
 	if (minidump_ftrace_in_oops && minidump_ftrace_dump)
-		minidump_add_trace_event(s->buffer, s->seq.len);
+		// minidump_add_trace_event(s->buffer, s->seq.len);
 }
 #else
 static void trace_dump_seq_buffer(struct trace_seq *s)
