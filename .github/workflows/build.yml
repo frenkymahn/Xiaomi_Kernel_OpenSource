@@ -77,24 +77,27 @@ jobs:
             scripts/kconfig/merge_config.sh -m -O out out/.config "$frag"
           done
 
-          # Suppress strict Clang 17 warnings and errors
+          # General build & warning flags
           scripts/config --file out/.config -d WERROR
           scripts/config --file out/.config -e QCOM_SCM
           scripts/config --file out/.config --set-val FRAME_WARN 4096
 
-          # Enable Subsystem Restart and Peripheral Loader drivers
+          # Subsystem Restart & Hypervisor dependencies
           scripts/config --file out/.config -e MSM_SUBSYSTEM_RESTART
           scripts/config --file out/.config -e MSM_SYSMON_QMI_COMM
           scripts/config --file out/.config -e MSM_PIL
           scripts/config --file out/.config -e MSM_PIL_SSR_GENERIC
           scripts/config --file out/.config -e QTI_GVM_QUIN_COMMON
 
-          # Disable Neuron channel drivers to eliminate undefined hh_* linker symbols
+          # Disable Neuron channel & networking drivers to eliminate hh_* symbols
           scripts/config --file out/.config -d NEURON
           scripts/config --file out/.config -d NET_NEURON
           scripts/config --file out/.config -d QTI_NEURON
 
-          # Keep Minidump enabled to satisfy symbols required by trace.c and ipc_logging.c
+          # Disable PLH SCMI driver to eliminate rimps_plh_init error
+          scripts/config --file out/.config -d QTI_PLH_SCMI
+
+          # Enable Minidump driver to satisfy trace.c and ipc_logging symbols
           scripts/config --file out/.config -e MSM_MINIDUMP
 
           make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" olddefconfig
