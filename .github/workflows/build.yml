@@ -77,21 +77,29 @@ jobs:
             scripts/kconfig/merge_config.sh -m -O out out/.config "$frag"
           done
 
-          # ലിങ്കർ എററുകൾ ഒഴിവാക്കാനുള്ള കോൺഫിഗ് മാറ്റങ്ങൾ
+          # Suppress strict Clang 17 warnings and errors
           scripts/config --file out/.config -d WERROR
           scripts/config --file out/.config -e QCOM_SCM
           scripts/config --file out/.config --set-val FRAME_WARN 4096
+
+          # Enable Subsystem Restart and Peripheral Loader drivers
           scripts/config --file out/.config -e MSM_SUBSYSTEM_RESTART
           scripts/config --file out/.config -e MSM_SYSMON_QMI_COMM
           scripts/config --file out/.config -e MSM_PIL
           scripts/config --file out/.config -e MSM_PIL_SSR_GENERIC
           scripts/config --file out/.config -e QTI_GVM_QUIN_COMMON
+
+          # Disable Neuron channel drivers to eliminate undefined hh_* linker symbols
+          scripts/config --file out/.config -d NEURON
+          scripts/config --file out/.config -d NET_NEURON
           scripts/config --file out/.config -d QTI_NEURON
-          scripts/config --file out/.config -d MSM_MINIDUMP
+
+          # Keep Minidump enabled to satisfy symbols required by trace.c and ipc_logging.c
+          scripts/config --file out/.config -e MSM_MINIDUMP
 
           make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" olddefconfig
           
-          # Image.gz ന് പകരം വേഗത്തിലും കൃത്യതയ്ക്കുമായി Normal Image നിർമ്മിക്കുന്നു
+          # Compile uncompressed raw kernel Image
           make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" Image || make -j1 O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" V=1 Image
 
       - name: Prepare AnyKernel3 Zip
@@ -99,7 +107,6 @@ jobs:
           git clone https://github.com/osm0sis/AnyKernel3.git AnyKernel3
           sed -i 's/device.name1=.*/device.name1=vili/g' AnyKernel3/anykernel.sh
 
-          # Normal Image കോപ്പി ചെയ്യുന്നു
           if [ -f "out/arch/arm64/boot/Image" ]; then
             cp out/arch/arm64/boot/Image AnyKernel3/
           elif [ -f "out/arch/arm64/boot/Image.gz" ]; then
