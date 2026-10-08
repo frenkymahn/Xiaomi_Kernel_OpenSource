@@ -77,34 +77,40 @@ jobs:
             scripts/kconfig/merge_config.sh -m -O out out/.config "$frag"
           done
 
-          # Suppress strict Clang 17 warnings and large frame limits
+          # Suppress warnings & build errors
           scripts/config --file out/.config -d WERROR
           scripts/config --file out/.config -e QCOM_SCM
           scripts/config --file out/.config --set-val FRAME_WARN 4096
 
-          # Subsystem restart, PIL & Hypervisor assignments
+          # Subsystem restart, PIL & GVM Quin
           scripts/config --file out/.config -e MSM_SUBSYSTEM_RESTART
           scripts/config --file out/.config -e MSM_SYSMON_QMI_COMM
           scripts/config --file out/.config -e MSM_PIL
           scripts/config --file out/.config -e MSM_PIL_SSR_GENERIC
           scripts/config --file out/.config -e QTI_GVM_QUIN_COMMON
 
-          # Qualcomm SMEM & RPMH Core (fixes qcom_smem_get, rpmh_flush, rpmh_write_pdc_data, rpmh_ctrlr_idle)
+          # SMEM, RPMH & Command DB (fixes qcom_smem_get, rpmh_* and cmd_db_*)
           scripts/config --file out/.config -e QCOM_SMEM
           scripts/config --file out/.config -e QCOM_RPMH
           scripts/config --file out/.config -e QCOM_RPMHPD
+          scripts/config --file out/.config -e QCOM_COMMAND_DB
 
-          # Minidump support (fixes msm_minidump_add_region, msm_minidump_enabled, md_pageowner_*, md_meminfo_seq_buf)
+          # Minidump core support (fixes msm_minidump_*, md_pageowner_*, md_meminfo_*)
           scripts/config --file out/.config -e MSM_MINIDUMP
           scripts/config --file out/.config -e QCOM_MINIDUMP
 
-          # MMC CQHCI Crypto (fixes cqhci_crypto_*)
+          # SPS & BAM drivers (fixes sps_* and get_qdss_bam_connection_info)
+          scripts/config --file out/.config -e MSM_SPS
+          scripts/config --file out/.config -e MSM_SPS_BAM
+
+          # CQHCI Crypto
           scripts/config --file out/.config -e MMC_CQHCI_CRYPTO
 
-          # Type-C UCSI GLINK (fixes register_ucsi_glink_notifier)
+          # Type-C UCSI GLINK notifier (fixes register_ucsi_glink_notifier)
           scripts/config --file out/.config -e UCSI_QCOM_GLINK
+          scripts/config --file out/.config -e QTI_TYPEC_GLINK_NOTIFIER
 
-          # Disable unused Hypervisor consumers & Neuron (fixes hh_rm_*, neuron_*)
+          # Disable unused Hypervisor consumers & Neuron (fixes hh_rm_* and neuron_*)
           scripts/config --file out/.config -d QTI_HYP_CORE_CTL
           scripts/config --file out/.config -d MSM_GVM_LOADER
           scripts/config --file out/.config -d QTI_MEM_BUF
