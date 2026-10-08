@@ -48,7 +48,7 @@ jobs:
           KBUILD_COMPILER_STRING="$(${{ github.workspace }}/toolchain/clang/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g')"
           export KBUILD_COMPILER_STRING
 
-          # 1. Generate defconfig using existing repository configs
+          # 1. Defconfig Generation
           make -j$(nproc --all) O=out ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
@@ -56,7 +56,7 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-androideabi- \
             vendor/lahaina_QGKI.config vendor/vili_QGKI.config
 
-          # 2. Compile Kernel
+          # 2. Compile Kernel Image (vmlinux & Image)
           make -j$(nproc --all) O=out ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
