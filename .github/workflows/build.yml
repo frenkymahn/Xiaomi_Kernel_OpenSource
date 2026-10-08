@@ -29,9 +29,13 @@ jobs:
         run: |
           mkdir -p toolchain
           cd toolchain
-          # Download Google Clang
-          git clone --depth=1 https://gitlab.com/crdroidandroid/android_prebuilts_clang_host_linux-x86_clang-r416183b.git clang
-          # Download GCC for Baremetal & Cross Compiling
+          # Download Google Clang from official Android Git
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 -b android12-release clang-repo
+          mkdir -p clang
+          cp -r clang-repo/clang-r416183b/* clang/ 2>/dev/null || cp -r clang-repo/* clang/
+          rm -rf clang-repo
+
+          # Download GCC
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git gcc64
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git gcc32
 
@@ -44,7 +48,7 @@ jobs:
           KBUILD_COMPILER_STRING="$(${{ github.workspace }}/toolchain/clang/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g')"
           export KBUILD_COMPILER_STRING
 
-          # 1. Defconfig Generation (Using vili_QGKI.config directly from repo)
+          # 1. Generate defconfig from repo
           make -j$(nproc --all) O=out ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
@@ -52,7 +56,7 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-androideabi- \
             vendor/lahaina-perf_defconfig vendor/vili_QGKI.config
 
-          # 2. Compile Kernel Image (vmlinux & Image)
+          # 2. Compile Kernel
           make -j$(nproc --all) O=out ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
