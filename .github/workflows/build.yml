@@ -1,89 +1,124 @@
-name: Build Kernel - Xiaomi 11T Pro (vili)
+name: Build Xiaomi 11T Pro Kernel (Android 15-17 & HyperOS)
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - vili-r-oss
 
 jobs:
   build:
-    name: Build Kernel Image & AnyKernel3
+    name: Compile Kernel with Clang 17+ & eBPF
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Source Code
+      - name: Checkout Kernel Source
         uses: actions/checkout@v4
         with:
-          ref: vili-r-oss
           fetch-depth: 1
 
-      - name: Setup Build Environment
+      - name: Install Build Dependencies & Clang 17
         run: |
-          sudo apt update -y
-          sudo apt install -y git ccache automake flex lzop bison \
-            bc build-essential libelf-dev libssl-dev libfl-dev \
-            squashfs-tools python3 python-is-python3 device-tree-compiler \
-            binutils-aarch64-linux-gnu
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex git gnupg gperf liblz4-tool libncurses-dev libncurses6 libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev tar wget binutils-aarch64-linux-gnu
+          
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 17
+          sudo apt-get install -y lld-17 llvm-17 clang-17
 
-      - name: Download Toolchains (Clang & GCC)
+          for tool in clang clang++ ld.lld llvm-ar llvm-nm llvm-objcopy llvm-objdump llvm-readelf llvm-strip; do
+            sudo ln -sf /usr/bin/${tool}-17 /usr/bin/${tool} || true
+          done
+
+          sudo ln -sf /usr/bin/ld.lld-17 /usr/bin/aarch64-linux-gnu-ld || true
+          sudo ln -sf /usr/bin/llvm-ar-17 /usr/bin/aarch64-linux-gnu-ar || true
+          sudo ln -sf /usr/bin/llvm-nm-17 /usr/bin/aarch64-linux-gnu-nm || true
+          sudo ln -sf /usr/bin/llvm-objcopy-17 /usr/bin/aarch64-linux-gnu-objcopy || true
+
+      - name: Cherry-pick AOSP eBPF Patches
         run: |
-          mkdir -p toolchain
-          cd toolchain
-          # Download Google Clang from official Android Git
-          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 -b android12-release clang-repo
-          mkdir -p clang
-          cp -r clang-repo/clang-r416183b/* clang/ 2>/dev/null || cp -r clang-repo/* clang/
-          rm -rf clang-repo
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
 
-          # Download GCC
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git gcc64
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9.git gcc32
+          git remote add aosp-common https://android.googlesource.com/kernel/common || true
+          git fetch aosp-common android12-5.4 --depth=100
 
-      - name: Build Kernel
+          COMMIT1=$(git log --grep="bpf: add bpf_ringbuf support" aosp-common/android12-5.4 -n 1 --pretty=format:"%H")
+          COMMIT2=$(git log --grep="bpf: Add bpf_sk_storage" aosp-common/android12-5.4 -n 1 --pretty=format:"%H")
+
+          if [ -n "$COMMIT1" ]; then
+            git cherry-pick $COMMIT1 || git cherry-pick --abort || true
+          fi
+
+          if [ -n "$COMMIT2" ]; then
+            git cherry-pick $COMMIT2 || git cherry-pick --abort || true
+          fi
+
+      - name: Setup KernelSU (v0.9.5 Legacy for 5.4)
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+
+      - name: Build Kernel Image
         run: |
           export ARCH=arm64
           export SUBARCH=arm64
-          export PATH="${{ github.workspace }}/toolchain/clang/bin:${{ github.workspace }}/toolchain/gcc64/bin:${{ github.workspace }}/toolchain/gcc32/bin:$PATH"
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export CROSS_COMPILE=aarch64-linux-gnu-
 
-          KBUILD_COMPILER_STRING="$(${{ github.workspace }}/toolchain/clang/bin/clang --version | head -n 1 | perl -pe 's/\(http.*?\)//gs' | sed -e 's/  */ /g')"
-          export KBUILD_COMPILER_STRING
+          mkdir -p out
 
-          # 1. Defconfig Generation
-          make -j$(nproc --all) O=out ARCH=arm64 \
-            CC=clang \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-android- \
-            CROSS_COMPILE_ARM32=arm-linux-androideabi- \
-            vendor/lahaina_QGKI.config vendor/vili_QGKI.config
+          # 1. Generate base defconfig
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 gki_defconfig
 
-          # 2. Compile Kernel Image (vmlinux & Image)
-          make -j$(nproc --all) O=out ARCH=arm64 \
-            CC=clang \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-android- \
-            CROSS_COMPILE_ARM32=arm-linux-androideabi- \
-            LD=ld.lld \
-            AR=llvm-ar \
-            NM=llvm-nm \
-            OBJCOPY=llvm-objcopy \
-            OBJDUMP=llvm-objdump \
-            STRIP=llvm-strip \
-            Image.gz-dtb dtbo.img
+          # 2. Merge Qualcomm Lahaina and Xiaomi Vili QGKI fragments
+          ARCH=arm64 scripts/kconfig/merge_config.sh -m -O out out/.config \
+            arch/arm64/configs/vendor/lahaina_QGKI.config \
+            arch/arm64/configs/vendor/vili_QGKI.config
 
-      - name: Package with AnyKernel3
+          # 3. Apply essential build adjustments & disable warnings as errors
+          scripts/config --file out/.config -d WERROR
+          scripts/config --file out/.config --set-val FRAME_WARN 4096
+
+          # Core Subsystem & PIL
+          scripts/config --file out/.config -e QCOM_SCM
+          scripts/config --file out/.config -e MSM_SUBSYSTEM_RESTART
+          scripts/config --file out/.config -e MSM_SYSMON_QMI_COMM
+          scripts/config --file out/.config -e MSM_PIL
+          scripts/config --file out/.config -e MSM_PIL_SSR_GENERIC
+          scripts/config --file out/.config -e QTI_GVM_QUIN_COMMON
+
+          # SMEM, RPMH, and Command DB core symbols
+          scripts/config --file out/.config -e QCOM_SMEM
+          scripts/config --file out/.config -e QCOM_RPMH
+          scripts/config --file out/.config -e QCOM_RPMHPD
+          scripts/config --file out/.config -e QCOM_COMMAND_DB
+          scripts/config --file out/.config -e MMC_CQHCI_CRYPTO
+
+          # Minidump core support
+          scripts/config --file out/.config -e MSM_MINIDUMP
+          scripts/config --file out/.config -e QCOM_MINIDUMP
+
+          # 4. Resolve dependencies
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" olddefconfig
+
+          # 5. Compile raw Image
+          make -j$(nproc --all) O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" Image || make -j1 O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-error -w -Wno-error=incompatible-function-pointer-types" V=1 Image
+
+      - name: Prepare AnyKernel3 Zip
         run: |
-          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
-          sed -i 's/BLOCK=.*/BLOCK=\/dev\/block\/bootdevice\/by-name\/boot;/g' AnyKernel3/anykernel.sh
-          sed -i 's/IS_SLOT_DEVICE=0;/IS_SLOT_DEVICE=1;/g' AnyKernel3/anykernel.sh
+          git clone https://github.com/osm0sis/AnyKernel3.git AnyKernel3
+          sed -i 's/device.name1=.*/device.name1=vili/g' AnyKernel3/anykernel.sh
 
-          cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/ 2>/dev/null || cp out/arch/arm64/boot/Image.gz AnyKernel3/ || cp out/arch/arm64/boot/Image AnyKernel3/
-          [ -f out/arch/arm64/boot/dtbo.img ] && cp out/arch/arm64/boot/dtbo.img AnyKernel3/
+          if [ -f "out/arch/arm64/boot/Image" ]; then
+            cp out/arch/arm64/boot/Image AnyKernel3/
+          elif [ -f "out/arch/arm64/boot/Image.gz" ]; then
+            cp out/arch/arm64/boot/Image.gz AnyKernel3/
+          fi
+
+          find out/arch/arm64/boot -name "*.dtb" -exec cp {} AnyKernel3/dtb \; || true
 
           cd AnyKernel3
-          zip -r9 ../AnyKernel3-vili-NextGen.zip * -x .git README.md *placeholder
+          zip -r9 ../NextGen-Kernel-vili-A15-A17.zip * -x .git README.md *placeholder
 
-      - name: Upload Flashable Kernel
+      - name: Upload Flashable Kernel Zip
         uses: actions/upload-artifact@v4
         with:
-          name: AnyKernel3-vili-NextGen
-          path: AnyKernel3-vili-NextGen.zip
+          name: NextGen-Kernel-vili-A15-A17
+          path: NextGen-Kernel-vili-A15-A17.zip
